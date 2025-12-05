@@ -1,0 +1,13 @@
+{
+  "input_path": "data/dataset_dashboard_ready.parquet",
+  "output_path": "data/dataset_dashboard_mvp.parquet",
+  "row_count": 327449,
+  "season_count": 3,
+  "seasons_found": [
+    "2022-2023",
+    "2023-2024",
+    "2024-2025"
+  ],
+  "total_boxes": 944586747,
+  "total_net_weight_kg": 7107333695.0
+}

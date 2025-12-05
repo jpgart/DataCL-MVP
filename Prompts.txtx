@@ -1,0 +1,7 @@
+source venv/bin/activate
+
+source venv/bin/activate && python scripts/Pipeline_transformación.py
+
+control + c para terminar servidor
+cd dashboard
+npm run dev

@@ -1,0 +1,109 @@
+{
+  "schema": {
+    "season": {
+      "type": "string",
+      "required": true,
+      "source_column": "Season",
+      "frequency": 757
+    },
+    "week": {
+      "type": "int64",
+      "required": true,
+      "source_column": "ETD Week",
+      "frequency": 757
+    },
+    "year": {
+      "type": "int64",
+      "required": true,
+      "source_column": "ETD Week",
+      "frequency": 757
+    },
+    "region": {
+      "type": "string",
+      "required": false,
+      "source_column": "Region",
+      "frequency": 757
+    },
+    "market": {
+      "type": "string",
+      "required": false,
+      "source_column": "Market",
+      "frequency": 757
+    },
+    "country": {
+      "type": "string",
+      "required": true,
+      "source_column": "Country",
+      "frequency": 757
+    },
+    "transport": {
+      "type": "string",
+      "required": false,
+      "source_column": "Transport",
+      "frequency": 757
+    },
+    "product": {
+      "type": "string",
+      "required": true,
+      "source_column": "Specie",
+      "frequency": 757
+    },
+    "variety": {
+      "type": "string",
+      "required": false,
+      "source_column": "Variety",
+      "frequency": 757
+    },
+    "importer": {
+      "type": "string",
+      "required": false,
+      "source_column": "Importer",
+      "frequency": 757
+    },
+    "exporter": {
+      "type": "string",
+      "required": true,
+      "source_column": "Exporter",
+      "frequency": 757
+    },
+    "port_destination": {
+      "type": "string",
+      "required": false,
+      "source_column": "Arrival port",
+      "frequency": 757
+    },
+    "boxes": {
+      "type": "int64",
+      "required": true,
+      "source_column": "Boxes",
+      "frequency": 757
+    },
+    "net_weight_kg": {
+      "type": "float64",
+      "required": true,
+      "source_column": "Kilograms",
+      "frequency": 757
+    }
+  },
+  "column_mapping": {
+    "Season": "season",
+    "ETD Week": "etd_week",
+    "Region": "region",
+    "Market": "market",
+    "Country": "country",
+    "Transport": "transport",
+    "Specie": "product",
+    "Variety": "variety",
+    "Importer": "importer",
+    "Exporter": "exporter",
+    "Arrival port": "port_destination",
+    "Boxes": "boxes",
+    "Kilograms": "net_weight_kg"
+  },
+  "metadata": {
+    "total_files_analyzed": 757,
+    "total_unique_columns": 13,
+    "updated": "2024-12-02",
+    "notes": "Added all missing columns: region, market, transport, variety, importer. All original CSV columns are now captured."
+  }
+}

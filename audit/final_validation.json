@@ -1,0 +1,35 @@
+{
+  "total_rows": 1754553,
+  "expected_rows": 1754553,
+  "total_boxes": 5144111652,
+  "total_kilos": 25412581716.0,
+  "expected_boxes": 5144111652,
+  "expected_kilos": 25412581716.0,
+  "missing_values": {
+    "season": 0,
+    "week": 0,
+    "year": 0,
+    "country": 1,
+    "product": 0,
+    "exporter": 13154,
+    "port_destination": 1,
+    "boxes": 0,
+    "net_weight_kg": 220,
+    "source_week": 0
+  },
+  "duplicates": 151301,
+  "schema_ok": true,
+  "types_ok": true,
+  "totals_match_csv": true,
+  "outliers": {
+    "week_out_of_range": 0,
+    "year_out_of_range": 0,
+    "negative_boxes": 0,
+    "negative_kilos": 0
+  },
+  "warnings": [
+    "Columna requerida 'country' tiene 1 valores nulos",
+    "Columna requerida 'exporter' tiene 13154 valores nulos",
+    "Filas duplicadas: 151301"
+  ]
+}
