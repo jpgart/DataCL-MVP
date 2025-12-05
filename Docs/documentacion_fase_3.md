@@ -886,6 +886,148 @@ python scripts/create_mvp_dataset.py \
 
 ---
 
+## Sistema de Referencias de Productos y Variedades
+
+**Objetivo:** Crear un sistema centralizado de referencias que permita a Gemini entender exactamente qué productos y variedades existen en el dataset, con traducciones ES/EN y mapeo preciso a los nombres reales del dataset.
+
+**Estado:** ✅ COMPLETADO
+
+**Implementación:**
+
+### 1. Scripts de Extracción y Enriquecimiento
+
+**`scripts/extract_product_variety_reference.py`:**
+- Lee `data/dataset_dashboard_mvp.parquet`
+- Extrae 48 productos únicos con sus nombres exactos
+- Extrae variedades agrupadas por producto
+- Genera JSON inicial con estructura base
+- Incluye conteo de registros por producto/variedad para validación
+
+**`scripts/enrich_product_reference.py`:**
+- Enriquece el JSON con traducciones ES/EN
+- Agrega sinónimos en español e inglés para 35 productos principales
+- Mejora descripciones con información contextual
+- Mantiene nombres exactos del dataset en `dataset_matches`
+
+### 2. Archivo JSON de Referencias
+
+**`dashboard/src/lib/product-variety-reference.json`:**
+- Estructura completa con secciones `products` y `varieties`
+- Cada producto incluye:
+  - `id`: identificador único (ej: "table_grape")
+  - `canonical_name`: nombre canónico en inglés
+  - `names`: objeto con arrays `en` y `es` de sinónimos
+  - `dataset_matches`: nombres exactos como aparecen en el dataset
+  - `description`: descripciones en ES/EN
+  - `varieties`: objeto con variedades comunes y del dataset
+- Cada variedad incluye:
+  - `names`: sinónimos ES/EN
+  - `dataset_matches`: nombres exactos en el dataset
+- Metadata: información de extracción (fecha, total de registros, productos)
+
+### 3. Funciones de Utilidad TypeScript
+
+**`dashboard/src/lib/product-reference.ts`:**
+- `findProductByName(query: string)`: Busca producto por cualquier nombre (ES/EN)
+- `findVariety(productId: string, varietyQuery: string)`: Busca variedad por producto
+- `getAllProducts()`: Retorna todos los productos
+- `getProductVarieties(productId: string)`: Retorna variedades de un producto
+- `normalizeToDatasetName(product: string, variety?: string)`: Normaliza a nombres exactos del dataset
+- `findSimilarProducts(query: string, limit: number)`: Búsqueda fuzzy para sugerencias
+- `getProductById(productId: string)`: Obtiene producto por ID canónico
+
+**Características:**
+- Búsqueda case-insensitive
+- Búsqueda parcial (contains)
+- Fallbacks si no encuentra coincidencias
+- Lazy loading del JSON para evitar problemas de importación
+
+### 4. Herramienta para Gemini
+
+**`getProductReference({ product?, variety? })` en `ai-tools.ts`:**
+- Retorna referencia completa con traducciones y `dataset_matches`
+- Si no encuentra producto, sugiere productos similares
+- Si no especifica producto, retorna lista completa
+- Registrada como herramienta en `route.ts` con descripción clara
+- Descripción: "Gets complete reference for a product or variety, including ES/EN translations and exact dataset names. Use this BEFORE querying data to ensure you use the correct product names from the dataset."
+
+### 5. Actualización de Búsquedas
+
+**`getTopExportersByKilos()` actualizada:**
+- Usa `findProductByName()` para normalizar productos
+- Usa `dataset_matches` para búsqueda más precisa
+- Mantiene fallback al sistema anterior (`PRODUCT_SYNONYMS`) para compatibilidad
+- Logging mejorado con información de búsqueda
+
+### 6. Actualización del System Prompt
+
+**`SYSTEM_MESSAGE` actualizado:**
+- Instrucciones para usar `getProductReference` primero: "When a user asks about a product, FIRST call getProductReference to get the exact dataset names, translations, and synonyms. Then use the dataset_matches values when querying data."
+- Enfatiza el uso de `dataset_matches` para consultas precisas
+- Instrucciones claras sobre cuándo usar la herramienta
+
+### Archivos Creados
+
+1. `scripts/extract_product_variety_reference.py`
+2. `scripts/enrich_product_reference.py`
+3. `dashboard/src/lib/product-variety-reference.json` (48 productos, ~20k líneas)
+4. `dashboard/src/lib/product-reference.ts`
+
+### Archivos Modificados
+
+1. `dashboard/src/lib/ai-tools.ts` - Agregada `getProductReference()`, actualizada `getTopExportersByKilos()`
+2. `dashboard/src/app/api/chat/route.ts` - Agregada herramienta `getProductReference`, actualizado `SYSTEM_MESSAGE`
+
+### Resultados
+
+- ✅ 48 productos únicos extraídos del dataset MVP
+- ✅ 35 productos enriquecidos con traducciones ES/EN
+- ✅ Sistema de búsqueda mejorado con referencias precisas
+- ✅ Gemini puede ahora entender productos en español e inglés y usar nombres exactos del dataset
+- ✅ Búsquedas más precisas usando `dataset_matches` en lugar de matching aproximado
+
+### Nota Técnica - Manejo de Mayúsculas/Minúsculas
+
+**Diseño del Sistema:**
+- Los IDs de productos en el JSON (ej: `"table_grape"`, `"blueberries"`) están en minúsculas y son solo identificadores internos para la estructura del JSON
+- Los `dataset_matches` contienen los nombres exactos del dataset (ej: `"Table Grape"`, `"Blueberries"`) con mayúsculas preservadas tal como aparecen en el dataset
+- La búsqueda es completamente case-insensitive: todas las comparaciones se normalizan a minúsculas antes de comparar
+
+**Flujo de Datos:**
+1. **Extracción (`extract_product_variety_reference.py`):**
+   - Línea 104: Guarda el nombre exacto del dataset en `dataset_matches`: `"dataset_matches": [product]` donde `product` viene directamente del dataset (ej: "Table Grape", "Blueberries")
+   - El `product_id` en minúsculas (línea 89) es solo para la clave del objeto JSON, no afecta `dataset_matches`
+
+2. **Enriquecimiento (`enrich_product_reference.py`):**
+   - Líneas 212-217: Solo enriquece los arrays `names.en` y `names.es`, no modifica `dataset_matches`
+   - Líneas 224-226: Asegura que `canonical_name` esté en `dataset_matches` si falta, pero preserva los nombres exactos existentes
+
+3. **Búsqueda (`product-reference.ts`):**
+   - Línea 64: Normaliza la query a minúsculas: `const normalized = query.trim().toLowerCase()`
+   - Líneas 69, 73, 77: Compara usando `.toLowerCase()` en todos los arrays (names.en, names.es, dataset_matches)
+   - La búsqueda es case-insensitive, por lo que encuentra productos independientemente de mayúsculas/minúsculas
+
+4. **Uso en Búsquedas (`ai-tools.ts`):**
+   - Línea 353: Convierte `dataset_matches` a minúsculas para la búsqueda: `searchTerms = productRef.dataset_matches.map(m => m.toLowerCase())`
+   - Línea 388: Compara con el producto del record también en minúsculas: `const recordProduct = (record.product?.trim() || '').toLowerCase()`
+   - El matching es case-insensitive, por lo que funciona correctamente con los nombres exactos del dataset
+
+**Conclusión:**
+No hay problema de mapeo porque:
+- Los `dataset_matches` contienen el nombre exacto del dataset (con mayúsculas): `["Table Grape"]`, `["Blueberries"]`
+- La búsqueda es case-insensitive (todo se normaliza a minúsculas para comparar)
+- El mapeo funciona correctamente: los nombres exactos se preservan y se usan en las búsquedas
+
+### Beneficios
+
+- **Precisión mejorada:** Gemini usa nombres exactos del dataset en lugar de traducciones aproximadas
+- **Multilingüe:** Soporte completo para búsquedas en español e inglés
+- **Sugerencias inteligentes:** Si no encuentra un producto, sugiere alternativas similares
+- **Mantenibilidad:** JSON centralizado fácil de actualizar y enriquecer
+- **Compatibilidad:** Mantiene fallback al sistema anterior para no romper funcionalidad existente
+
+---
+
 ## PHASE 4 — Analytics + Function Calling
 
 **Objetivo:** Extender el toolkit de analytics con nuevas funciones, corregir el error de TypeScript en `api/chat/route.ts`, y mejorar la interfaz de function calling para que Gemini pueda responder preguntas sobre datos usando funciones reales del dataset.
@@ -1023,7 +1165,7 @@ Después de la implementación, Gemini tendrá acceso a:
 
 ---
 
-**Última actualización:** 2025-01-27  
+**Última actualización:** 2025-12-05  
 **Autor:** AI Assistant (Auto)  
-**Revisión:** Fase 3 COMPLETADA ✅ + Mejoras Post-MVP ✅ + Chat AI con Function Calling ✅ + Internacionalización ✅ + Páginas Deep Dive ✅ + Refactor UI/UX BATCH 1 ✅ + BATCH 2 ✅ + BATCH 3 ✅ | PHASE 4 📋 PLANIFICADO
+**Revisión:** Fase 3 COMPLETADA ✅ + Mejoras Post-MVP ✅ + Chat AI con Function Calling ✅ + Internacionalización ✅ + Páginas Deep Dive ✅ + Refactor UI/UX BATCH 1 ✅ + BATCH 2 ✅ + BATCH 3 ✅ + Sistema de Referencias de Productos ✅ | PHASE 4 📋 PLANIFICADO
 

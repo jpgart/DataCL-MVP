@@ -1188,6 +1188,73 @@ DataCL/
   - ✅ Agregación pre-calculada reduce complejidad de renderizado
 - **Estado:** ✅ BATCH 3 completado. Sistema visual profesional establecido, gráficos con apariencia consistente y refinada.
 
+### Sistema de Referencias de Productos y Variedades
+
+- **Objetivo:** Crear un sistema centralizado de referencias que permita a Gemini entender exactamente qué productos y variedades existen en el dataset, con traducciones ES/EN y mapeo preciso a los nombres reales del dataset.
+- **Implementación:**
+  1. **Scripts de Extracción y Enriquecimiento:**
+     - `scripts/extract_product_variety_reference.py` - Extrae productos y variedades únicos del dataset MVP
+       - Lee `data/dataset_dashboard_mvp.parquet`
+       - Extrae 48 productos únicos con sus nombres exactos
+       - Extrae variedades agrupadas por producto
+       - Genera JSON inicial con estructura base
+     - `scripts/enrich_product_reference.py` - Enriquece el JSON con traducciones ES/EN
+       - Agrega sinónimos en español e inglés para 35 productos principales
+       - Mejora descripciones con información contextual
+       - Mantiene nombres exactos del dataset en `dataset_matches`
+  2. **Archivo JSON de Referencias:**
+     - `dashboard/src/lib/product-variety-reference.json` - Estructura completa con:
+       - `products`: Cada producto incluye `id`, `canonical_name`, `names` (arrays ES/EN), `dataset_matches`, `description`, `record_count`, `variety_count`, `varieties`
+       - `varieties`: Variedades agrupadas por producto con `names`, `dataset_matches`, `record_count`
+       - `metadata`: Información de extracción (fecha, total de registros, productos)
+  3. **Funciones de Utilidad TypeScript:**
+     - `dashboard/src/lib/product-reference.ts` - Módulo completo con:
+       - `findProductByName(query)` - Busca producto por cualquier nombre (ES/EN)
+       - `findVariety(productId, varietyQuery)` - Busca variedad por producto
+       - `getAllProducts()` - Retorna todos los productos
+       - `getProductVarieties(productId)` - Retorna variedades de un producto
+       - `normalizeToDatasetName(product, variety?)` - Normaliza a nombres exactos del dataset
+       - `findSimilarProducts(query, limit)` - Búsqueda fuzzy para sugerencias
+       - `getProductById(productId)` - Obtiene producto por ID canónico
+  4. **Herramienta para Gemini:**
+     - `getProductReference({ product?, variety? })` en `ai-tools.ts`
+       - Retorna referencia completa con traducciones y `dataset_matches`
+       - Si no encuentra producto, sugiere productos similares
+       - Si no especifica producto, retorna lista completa
+       - Registrada como herramienta en `route.ts` con descripción clara
+  5. **Actualización de Búsquedas:**
+     - `getTopExportersByKilos()` actualizada para usar `findProductByName()`
+     - Usa `dataset_matches` para búsqueda más precisa
+     - Mantiene fallback al sistema anterior para compatibilidad
+  6. **Actualización del System Prompt:**
+     - `SYSTEM_MESSAGE` actualizado para instruir a Gemini a usar `getProductReference` primero
+     - Enfatiza el uso de `dataset_matches` para consultas precisas
+     - Instrucciones claras: "FIRST call getProductReference to get the exact dataset names, translations, and synonyms. Then use the dataset_matches values when querying data."
+- **Archivos Creados:**
+  - `scripts/extract_product_variety_reference.py`
+  - `scripts/enrich_product_reference.py`
+  - `dashboard/src/lib/product-variety-reference.json` (48 productos, ~20k líneas)
+  - `dashboard/src/lib/product-reference.ts`
+- **Archivos Modificados:**
+  - `dashboard/src/lib/ai-tools.ts` - Agregada `getProductReference()`, actualizada `getTopExportersByKilos()`
+  - `dashboard/src/app/api/chat/route.ts` - Agregada herramienta `getProductReference`, actualizado `SYSTEM_MESSAGE`
+- **Resultados:**
+  - 48 productos únicos extraídos del dataset MVP
+  - 35 productos enriquecidos con traducciones ES/EN
+  - Sistema de búsqueda mejorado con referencias precisas
+  - Gemini puede ahora entender productos en español e inglés y usar nombres exactos del dataset
+- **Nota Técnica - Manejo de Mayúsculas/Minúsculas:**
+  - Los IDs de productos en el JSON (ej: "table_grape", "blueberries") están en minúsculas y son solo identificadores internos
+  - Los `dataset_matches` contienen los nombres exactos del dataset (ej: "Table Grape", "Blueberries") con mayúsculas preservadas
+  - La búsqueda es case-insensitive: todas las comparaciones se normalizan a minúsculas antes de comparar
+  - El sistema funciona correctamente porque:
+    1. `extract_product_variety_reference.py` guarda el nombre exacto del dataset en `dataset_matches`
+    2. `enrich_product_reference.py` solo enriquece los arrays `names`, no modifica `dataset_matches`
+    3. `findProductByName()` normaliza todo a minúsculas para búsqueda case-insensitive
+    4. `getTopExportersByKilos()` usa `dataset_matches` convertidos a minúsculas para comparar con records también en minúsculas
+  - No hay problema de mapeo: los nombres exactos del dataset se preservan y se usan correctamente en las búsquedas
+- **Estado:** ✅ COMPLETADO
+
 ### PHASE 4 — Analytics + Function Calling (En Planificación)
 
 - **Objetivo:** Extender el toolkit de analytics con nuevas funciones, corregir el error de TypeScript en `api/chat/route.ts`, y mejorar la interfaz de function calling para que Gemini pueda responder preguntas sobre datos usando funciones reales del dataset.
@@ -1227,13 +1294,14 @@ DataCL/
      - Clarificar que todos los datos deben venir de herramientas (sin alucinaciones)
      - Ejemplos de cuándo usar cada tipo de herramienta
 - **Herramientas Finales Disponibles para Gemini:**
-  1. `getGlobalKPIs` - KPIs globales con filtros opcionales
-  2. `getTopCountriesByKilos` - Ranking de países por kilogramos
-  3. `getTopExportersByKilos` - Ranking de exportadores por kilogramos
-  4. `getTopProductsByKilos` - Ranking de productos por kilogramos (NUEVA)
-  5. `getTimeSeriesByCountry` - Tendencias anuales por país
-  6. `getTrendByProduct` - Tendencias anuales por producto (NUEVA)
-  7. `getExporterSummary` - Resumen específico de exportador (NUEVA)
+  1. `getProductReference` - Referencias de productos con traducciones ES/EN (NUEVA)
+  2. `getGlobalKPIs` - KPIs globales con filtros opcionales
+  3. `getTopCountriesByKilos` - Ranking de países por kilogramos
+  4. `getTopExportersByKilos` - Ranking de exportadores por kilogramos
+  5. `getTopProductsByKilos` - Ranking de productos por kilogramos (NUEVA)
+  6. `getTimeSeriesByCountry` - Tendencias anuales por país
+  7. `getTrendByProduct` - Tendencias anuales por producto (NUEVA)
+  8. `getExporterSummary` - Resumen específico de exportador (NUEVA)
 - **Archivos a Modificar:**
   - `dashboard/src/lib/ai-tools.ts` - Agregar 3 nuevas funciones, extender getGlobalKPIs
   - `dashboard/src/lib/ai-schemas.ts` - Agregar 3 nuevos schemas
@@ -1241,6 +1309,6 @@ DataCL/
 - **Estado:** 📋 PLANIFICADO - Pendiente de implementación y confirmación del plan.
 
 **Documento mantenido por:** AI Assistant (Auto)  
-**Última revisión:** 2025-01-27  
-**Estado del proyecto:** Fase 1 COMPLETADA ✅ (1A, 1B, Auditoría, 1C, 1D, 1E) | Fase 2 COMPLETADA ✅ | Fase 3 COMPLETADA ✅ + Mejoras Post-MVP ✅ + Chat AI con Function Calling ✅ + Internacionalización ✅ + Páginas Deep Dive ✅ + Refactor UI/UX BATCH 1 ✅ + BATCH 2 ✅ + BATCH 3 ✅ | PHASE 4 📋 PLANIFICADO
+**Última revisión:** 2025-12-05  
+**Estado del proyecto:** Fase 1 COMPLETADA ✅ (1A, 1B, Auditoría, 1C, 1D, 1E) | Fase 2 COMPLETADA ✅ | Fase 3 COMPLETADA ✅ + Mejoras Post-MVP ✅ + Chat AI con Function Calling ✅ + Internacionalización ✅ + Páginas Deep Dive ✅ + Refactor UI/UX BATCH 1 ✅ + BATCH 2 ✅ + BATCH 3 ✅ + Sistema de Referencias de Productos ✅ | PHASE 4 📋 PLANIFICADO
 

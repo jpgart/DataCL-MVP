@@ -13,7 +13,8 @@ import {
 	getTopCountriesByKilos,
 	getTopExportersByKilos,
 	getTimeSeriesByCountry,
-	getAvailableProducts
+	getAvailableProducts,
+	getProductReference
 } from '@/lib/ai-tools';
 import { buildGoogleProviderOptions, buildGoogleToolingConfig } from '@/lib/ai-config';
 
@@ -40,14 +41,14 @@ const SYSTEM_MESSAGE =
 	'You are Me-Vi, an expert analyst in Chilean agricultural exports. ' +
 	'CRITICAL RULES: ' +
 	'1. ALWAYS use the provided tools to get data. NEVER use your training knowledge or translate product names before calling tools. ' +
-	'2. When a user asks about a product (e.g., "uvas", "grapes", "avocados", "paltas", "arándanos", "blueberries"), pass the EXACT product name from the user\'s query to the tool. The tool will handle normalization internally. ' +
+	'2. When a user asks about a product (e.g., "uvas", "grapes", "avocados", "paltas", "arándanos", "blueberries"), FIRST call getProductReference to get the exact dataset names, translations, and synonyms. Then use the dataset_matches values when querying data. ' +
 	'3. If the user does NOT specify a year, do NOT filter by year. Use all available data unless the user explicitly asks for a specific year. ' +
 	'4. Detect the language of the user\'s message (Spanish or English) and respond in the SAME language. If the user writes in Spanish, respond in Spanish. If the user writes in English, respond in English. ' +
 	'5. When presenting rankings or KPIs, always mention both boxes and kilograms (both values) if the data includes them. ' +
-	'6. If the user asks "who" or mentions "exporter", use getTopExportersByKilos. If they ask about a specific product, include the product parameter. ' +
-	'7. If no data is found, first try calling getAvailableProducts to see what products exist in the dataset, then suggest similar products or explain that the product might not be in the dataset. ' +
+	'6. If the user asks "who" or mentions "exporter", use getTopExportersByKilos. If they ask about a specific product, FIRST use getProductReference to verify the product name, then use the dataset_matches in your query. ' +
+	'7. If getProductReference returns suggestions, use those to help the user find the correct product. If no data is found, explain clearly in the user\'s language. ' +
 	'8. Always cite which tool you used and what parameters you passed. ' +
-	'9. If a tool returns an error mentioning available products, use that information to help the user find the correct product name.';
+	'9. The getProductReference tool provides dataset_matches which are the EXACT names to use in dataset queries. Always use these exact names.';
 
 const MAX_TOOL_STEPS = 6;
 const continueUntilComplete = ({ steps }: { steps: Array<{ finishReason?: string }> }) => {
@@ -141,6 +142,16 @@ export async function POST(req: NextRequest) {
 		const googleTooling = buildGoogleToolingConfig();
 
 		const customTools: ToolSet = {
+			getProductReference: {
+				description: 'Gets complete reference for a product or variety, including ES/EN translations and exact dataset names. Use this BEFORE querying data to ensure you use the correct product names from the dataset. Returns dataset_matches which are the exact names to use in queries.',
+				inputSchema: z.object({
+					product: z.string().min(1).optional().describe('Product name as written by the user (e.g., "uvas", "grapes", "arándanos", "blueberries"). Pass exactly as user wrote it.'),
+					variety: z.string().min(1).optional().describe('Optional: Variety name if user asks about a specific variety.')
+				}),
+				execute: async ({ product, variety }: { product?: string; variety?: string }) => {
+					return await getProductReference({ product, variety });
+				}
+			},
 			getAvailableProducts: {
 				description: 'Lists all available product names in the dataset. Use this to verify product names before querying exporters or other data.',
 				inputSchema: z.object({}),
