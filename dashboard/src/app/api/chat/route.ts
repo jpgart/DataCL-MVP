@@ -41,14 +41,14 @@ const SYSTEM_MESSAGE =
 	'You are Me-Vi, an expert analyst in Chilean agricultural exports. ' +
 	'CRITICAL RULES: ' +
 	'1. ALWAYS use the provided tools to get data. NEVER use your training knowledge or translate product names before calling tools. ' +
-	'2. When a user asks about a product (e.g., "uvas", "grapes", "avocados", "paltas", "arándanos", "blueberries"), FIRST call getProductReference to get the exact dataset names, translations, and synonyms. Then use the dataset_matches values when querying data. ' +
+	'2. When a user asks about a product (e.g., "uvas", "grapes", "avocados", "paltas", "arándanos", "blueberries"), FIRST call getProductReference to get the exact dataset names, translations, and synonyms. Then use the dataset_matches values when querying other tools (recommended approach). ' +
 	'3. If the user does NOT specify a year, do NOT filter by year. Use all available data unless the user explicitly asks for a specific year. ' +
 	'4. Detect the language of the user\'s message (Spanish or English) and respond in the SAME language. If the user writes in Spanish, respond in Spanish. If the user writes in English, respond in English. ' +
 	'5. When presenting rankings or KPIs, always mention both boxes and kilograms (both values) if the data includes them. ' +
-	'6. If the user asks "who" or mentions "exporter", use getTopExportersByKilos. If they ask about a specific product, FIRST use getProductReference to verify the product name, then use the dataset_matches in your query. ' +
+	'6. If the user asks "who" or mentions "exporter", use getTopExportersByKilos. RECOMMENDED: First call getProductReference to get dataset_matches, then pass those exact names to getTopExportersByKilos. ALTERNATIVE: You can also pass the product name as the user wrote it and the tool will handle normalization. ' +
 	'7. If getProductReference returns suggestions, use those to help the user find the correct product. If no data is found, explain clearly in the user\'s language. ' +
 	'8. Always cite which tool you used and what parameters you passed. ' +
-	'9. The getProductReference tool provides dataset_matches which are the EXACT names to use in dataset queries. Always use these exact names.';
+	'9. The getProductReference tool provides dataset_matches which are the EXACT names to use in dataset queries. Using these exact names is recommended for best accuracy.';
 
 const MAX_TOOL_STEPS = 6;
 const continueUntilComplete = ({ steps }: { steps: Array<{ finishReason?: string }> }) => {
@@ -194,10 +194,13 @@ export async function POST(req: NextRequest) {
         },
 			getTopExportersByKilos: {
 				description:
-					'Returns the ranking of exporters (companies) by kilograms exported. IMPORTANT: Pass the product name EXACTLY as the user wrote it (e.g., "uvas", "grapes", "avocados", "paltas"). Do NOT translate or modify the product name. The tool handles normalization internally. If the user does not specify a year, omit the year parameter to get data from all years.',
+					'Returns the ranking of exporters (companies) by kilograms exported. ' +
+					'RECOMMENDED: First call getProductReference to get exact dataset names, then pass the dataset_matches value here. ' +
+					'ALTERNATIVE: You can also pass the product name as the user wrote it (e.g., "uvas", "grapes", "avocados", "paltas") and the tool will handle normalization internally. ' +
+					'If the user does not specify a year, omit the year parameter to get data from all years.',
 				inputSchema: z.object({
 					year: z.number().int().optional().describe('Optional: Filter by specific year. Omit to get all years.'),
-					product: z.string().min(1).optional().describe('Optional: Product name as written by the user (e.g., "uvas", "grapes", "avocados"). Pass exactly as user wrote it.'),
+					product: z.string().min(1).optional().describe('Product name: either from getProductReference dataset_matches (recommended) or as written by the user. The tool handles normalization internally.'),
 					limit: z
 						.number()
 						.int()

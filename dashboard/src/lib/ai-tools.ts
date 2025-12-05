@@ -357,14 +357,31 @@ export async function getTopExportersByKilos({
 				searchTerms
 			});
 		} else {
-			// Fallback: usar término original y sinónimos antiguos
+			// Fallback: intentar usar PRODUCT_FAMILY_METADATA para obtener nombres reales del dataset
 			const trimmed = originalProduct.toLowerCase();
-			const normalizedProduct = PRODUCT_SYNONYMS[trimmed] ?? trimmed;
-			searchTerms = [normalizedProduct, trimmed].filter(Boolean);
-			console.log('[TOOLS] getTopExportersByKilos - Product not in reference, using fallback', {
-				query: originalProduct,
-				searchTerms
-			});
+			const productFamily = PRODUCT_SYNONYMS[trimmed];
+			
+			if (productFamily && PRODUCT_FAMILY_METADATA[productFamily]) {
+				// Usar canonicalName y examples del metadata como términos de búsqueda
+				const metadata = PRODUCT_FAMILY_METADATA[productFamily];
+				searchTerms = [
+					metadata.canonicalName.toLowerCase(),
+					...metadata.examples.map(ex => ex.toLowerCase())
+				].filter(Boolean);
+				console.log('[TOOLS] getTopExportersByKilos - Product not in reference, using family metadata', {
+					query: originalProduct,
+					family: productFamily,
+					canonicalName: metadata.canonicalName,
+					searchTerms
+				});
+			} else {
+				// Último fallback: usar término original directamente
+				searchTerms = [trimmed];
+				console.log('[TOOLS] getTopExportersByKilos - Product not in reference or metadata, using original term', {
+					query: originalProduct,
+					searchTerms
+				});
+			}
 		}
 	}
 
